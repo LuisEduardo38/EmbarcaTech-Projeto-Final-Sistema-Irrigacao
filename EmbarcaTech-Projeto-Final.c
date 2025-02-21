@@ -2,6 +2,15 @@
 #include "pico/stdlib.h"
 #include "pico/bootrom.h"
 
+#include "Bibliotecas/font.h"
+#include "Bibliotecas/ssd1306.h"
+#include "hardware/i2c.h"
+
+#define I2C_PORT i2c1
+#define I2C_SDA 14
+#define I2C_SCL 15
+#define endereco 0x3C
+
 const uint8_t led_red_pinos = 13;
 const uint8_t led_blue_pinos = 12;
 const uint8_t led_green_pinos = 11;
@@ -26,7 +35,21 @@ int main(){
     gpio_set_irq_enabled_with_callback(btn_b, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     gpio_set_irq_enabled_with_callback(btn_j, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
 
+    i2c_init(I2C_PORT, 400 * 1000);
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
+    gpio_pull_up(I2C_SDA);
+    gpio_pull_up(I2C_SCL);
+    ssd1306_t ssd;
+    ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT);
+    ssd1306_config(&ssd);
+    ssd1306_send_data(&ssd);
+    ssd1306_fill(&ssd, false);
+    ssd1306_send_data(&ssd);
+
     while(true){
+        ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 1);
+        ssd1306_send_data(&ssd);
         printf("\n");
         sleep_ms(1000);
     }
@@ -50,6 +73,7 @@ void gpio_irq_handler(uint gpio, uint32_t events){
         ultimo_tempo = tempo_atual;
         if(gpio == 5){
             printf("BTN_A\n");
+            reset_usb_boot(0, 0);
         }
         else if(gpio == 6){
             printf("BTN_B\n");
