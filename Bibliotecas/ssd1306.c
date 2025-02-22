@@ -158,12 +158,17 @@ void ssd1306_draw_char(ssd1306_t *ssd, char c, uint8_t x, uint8_t y)
 {
   uint16_t index = 0;
   char ver=c;
-  if (c >= 'A' && c <= 'Z')
-  {
+  if (c >= 'A' && c <= 'Z'){
     index = (c - 'A' + 11) * 8; // Para letras maiúsculas
-  }else  if (c >= '0' && c <= '9')
-  {
+  }
+  else  if (c >= '0' && c <= '9'){
     index = (c - '0' + 1) * 8; // Adiciona o deslocamento necessário
+  }
+  else if(c >= 'a' && c <= 'z'){
+    index = (c - 'a' + 37) * 8;// letras minúsculas
+  }
+  else if(c >= ':' && c <= '>'){
+    index = (c - ':' + 63) * 8;// caracteres especiais
   }
   
   for (uint8_t i = 0; i < 8; ++i)

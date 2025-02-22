@@ -31,6 +31,10 @@ int main(){
     stdio_init_all();
     iniciar_pinos();
 
+    uint16_t umidade_solo = 500;
+    uint16_t umidade_ar = 500;
+    uint16_t resevadorio_agua = 1000;
+
     gpio_set_irq_enabled_with_callback(btn_a, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     gpio_set_irq_enabled_with_callback(btn_b, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     gpio_set_irq_enabled_with_callback(btn_j, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
@@ -48,9 +52,10 @@ int main(){
     ssd1306_send_data(&ssd);
 
     while(true){
-        ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 1);
+
+        ssd1306_draw_string(&ssd, "SISTEMA DE", 26, 1);
+        ssd1306_draw_string(&ssd, "IRRIGACAO", 26, 10);
         ssd1306_send_data(&ssd);
-        printf("\n");
         sleep_ms(1000);
     }
 }
