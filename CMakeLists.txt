@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(EmbarcaTech-Projeto-Final EmbarcaTech-Projeto-Final.c Bibliotecas/ssd1306.c)
+add_executable(EmbarcaTech-Projeto-Final EmbarcaTech-Projeto-Final.c Bibliotecas/ssd1306.c Bibliotecas/ws2818b.pio)
 
 pico_set_program_name(EmbarcaTech-Projeto-Final "EmbarcaTech-Projeto-Final")
 pico_set_program_version(EmbarcaTech-Projeto-Final "0.1")
@@ -44,8 +44,11 @@ pico_set_program_version(EmbarcaTech-Projeto-Final "0.1")
 pico_enable_stdio_uart(EmbarcaTech-Projeto-Final 0)
 pico_enable_stdio_usb(EmbarcaTech-Projeto-Final 1)
 
+pico_generate_pio_header(EmbarcaTech-Projeto-Final ${CMAKE_CURRENT_LIST_DIR}/Bibliotecas/ws2818b.pio)
+
 # Add the standard library to the build
 target_link_libraries(EmbarcaTech-Projeto-Final
+        hardware_pio
         hardware_pwm
         hardware_adc
         hardware_i2c

@@ -1,0 +1,33 @@
+.program ws2818b
+.side_set 1
+
+.wrap_target
+    out x, 1        side 0 [2]  ; Configura o tempo de reset inicial
+    jmp !x, 3       side 1 [1]  ; Pulso curto para bit 0
+    jmp 0           side 1 [4]  ; Pulso longo para bit 1
+    nop             side 0 [4]  ; Tempo de espera no final
+.wrap
+
+% c-sdk {
+#include "hardware/clocks.h"
+
+void ws2818b_program_init(PIO pio, uint sm, uint offset, uint pin, float freq) {
+    // Configurar o pino de saída
+    pio_gpio_init(pio, pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+
+    // Configuração do estado da máquina
+    pio_sm_config c = ws2818b_program_get_default_config(offset);
+    sm_config_set_sideset_pins(&c, pin); // Configurar sideset
+    sm_config_set_out_shift(&c, true, true, 8); // Enviar 8 bits por vez
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX); // Unir FIFO para TX apenas
+
+    // Calcular divisor de clock
+    float div = clock_get_hz(clk_sys) / (freq * 10); // 10 ciclos por bit
+    sm_config_set_clkdiv(&c, div);
+
+    // Inicializar a máquina de estado
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

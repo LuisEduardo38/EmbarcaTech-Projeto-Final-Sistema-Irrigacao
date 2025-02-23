@@ -9,6 +9,10 @@
 #include "Bibliotecas/ssd1306.h"
 #include "hardware/i2c.h"
 
+#include "hardware/gpio.h"
+#include "hardware/pio.h"
+#include "ws2818b.pio.h"
+
 #define I2C_PORT i2c1
 #define I2C_SDA 14
 #define I2C_SCL 15
@@ -22,14 +26,15 @@ const uint8_t btn_a = 5;
 const uint8_t btn_b = 6;
 const uint8_t btn_j = 22;
 
+const uint8_t matriz_pino = 7;
+const uint8_t numero_led = 25;
+
 volatile uint32_t ultimo_tempo = 0;
 volatile bool segunda_tela = true;
 volatile bool limpar_tela = false;
 
 volatile bool trava_temperatura = true;
-volatile bool trava_reservatorio = false;
-
-struct repeating_timer timer_temperatura;
+volatile bool trava_tempo = true;
 
 void iniciar_pinos();
 uint8_t sensor_temperatura();
@@ -57,6 +62,11 @@ int main(){
     ssd1306_send_data(&ssd);
     ssd1306_fill(&ssd, false);
     ssd1306_send_data(&ssd);
+
+    PIO pio = pio0;
+    int sm = 0;
+    uint offset = pio_add_program(pio, &ws2818b_program);
+    ws2818b_program_init(pio, sm, offset, matriz_pino, 800000);
 
     uint8_t umidade_solo = 40;
     uint8_t reservatorio_agua = 100;
@@ -157,6 +167,7 @@ void gpio_irq_handler(uint gpio, uint32_t events){
         }
         else if(gpio == 6){
             printf("BTN_B\n");
+
             limpar_tela = true;
             segunda_tela = !segunda_tela;
         }
@@ -176,6 +187,8 @@ uint8_t sensor_temperatura(){
 }
 
 uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual){
+    static bool trava_reservatorio = false;
+
     if((reservatorio_atual < 80) && (trava_reservatorio == false)){
         reservatorio_atual = reservatorio_atual + 7;
         if(reservatorio_atual > 80){
