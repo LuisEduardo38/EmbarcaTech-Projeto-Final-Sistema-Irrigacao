@@ -31,10 +31,6 @@ int main(){
     stdio_init_all();
     iniciar_pinos();
 
-    uint16_t umidade_solo = 500;
-    uint16_t umidade_ar = 500;
-    uint16_t resevadorio_agua = 1000;
-
     gpio_set_irq_enabled_with_callback(btn_a, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     gpio_set_irq_enabled_with_callback(btn_b, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     gpio_set_irq_enabled_with_callback(btn_j, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
@@ -51,10 +47,32 @@ int main(){
     ssd1306_fill(&ssd, false);
     ssd1306_send_data(&ssd);
 
+    uint8_t umidade_solo = 0;
+    uint8_t resevatorio_agua = 0;
+    uint8_t temperatura = 0;
+
+    char umidade [2];
+    char resertorio [2];
+
     while(true){
+        sprintf(umidade, "%d", umidade_solo);
+        sprintf(resertorio, "%d", resevatorio_agua);
+
+        umidade_solo++;
+        resevatorio_agua++;
 
         ssd1306_draw_string(&ssd, "SISTEMA DE", 26, 1);
         ssd1306_draw_string(&ssd, "IRRIGACAO", 26, 10);
+        
+        ssd1306_draw_string(&ssd, "RESERTORIO", 27, 25);
+        ssd1306_draw_string(&ssd, "  :10", 48, 35);
+        ssd1306_draw_string(&ssd, resertorio, 44, 35);
+        ssd1306_draw_string(&ssd, "UMIDADE SOLO", 14, 45);
+        ssd1306_draw_string(&ssd, "  :10", 48, 55);
+        ssd1306_draw_string(&ssd, umidade, 44, 55);
+
+
+
         ssd1306_send_data(&ssd);
         sleep_ms(1000);
     }
