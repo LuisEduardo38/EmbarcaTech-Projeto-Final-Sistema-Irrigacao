@@ -1,7 +1,9 @@
 #include <stdio.h>
+#include <time.h>
 #include "pico/stdlib.h"
 #include "pico/bootrom.h"
 #include "hardware/pwm.h"
+#include "hardware/timer.h"
 
 #include "Bibliotecas/font.h"
 #include "Bibliotecas/ssd1306.h"
@@ -24,12 +26,21 @@ volatile uint32_t ultimo_tempo = 0;
 volatile bool segunda_tela = true;
 volatile bool limpar_tela = false;
 
+volatile bool trava_temperatura = true;
+volatile bool trava_reservatorio = false;
+
+struct repeating_timer timer_temperatura;
+
 void iniciar_pinos();
+uint8_t sensor_temperatura();
 void gpio_irq_handler(uint gpio, uint32_t events);
+uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual);
+void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, uint8_t *temperatura_atual);
 
 int main(){
     stdio_init_all();
     iniciar_pinos();
+    srand(time(NULL));
 
     gpio_set_irq_enabled_with_callback(btn_a, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     gpio_set_irq_enabled_with_callback(btn_b, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
@@ -47,19 +58,28 @@ int main(){
     ssd1306_fill(&ssd, false);
     ssd1306_send_data(&ssd);
 
-    bool limite = true;
-
-    uint8_t umidade_solo = 0;
-    uint8_t resevatorio_agua = 0;
-    uint8_t temperatura_ambiente = 20;
+    uint8_t umidade_solo = 40;
+    uint8_t reservatorio_agua = 100;
+    uint8_t temperatura_ambiente = 0;
 
     char umidade [2];
     char resertorio [2];
     char temperatura [2];
 
     while(true){
+        if(trava_temperatura == true){
+            temperatura_ambiente = sensor_temperatura();
+            trava_temperatura = false;
+        }
+
+        reservatorio_agua = sensor_reservatorio_agua(reservatorio_agua);
+
+        sensor_umidade_solo(&umidade_solo, &reservatorio_agua, &temperatura_ambiente);
+
+        printf("%d\n", umidade_solo);
+
         sprintf(umidade, "%d", umidade_solo);
-        sprintf(resertorio, "%d", resevatorio_agua);
+        sprintf(resertorio, "%d", reservatorio_agua);
         sprintf(temperatura, "%d", temperatura_ambiente);
         
         if(limpar_tela == true){
@@ -86,43 +106,10 @@ int main(){
             ssd1306_draw_string(&ssd, temperatura, 55, 45);
         }
 
-        /*if(limite == true){
-            umidade_solo++;
-            resevatorio_agua++;    
-            if(umidade_solo == 100){
-                limite = false;
-            }
-        }
-        else if(limite == false){
-            umidade_solo--;
-            resevatorio_agua--;
-            if(umidade_solo == 0){
-                limite = true;
-            }
-        }*/
-
-        if(limite == true){
-            temperatura_ambiente++;
-            if(temperatura_ambiente == 40){
-                limite = false;
-            }
-        }
-        else if(limite == false){
-            temperatura_ambiente--;
-            if(temperatura_ambiente == 0){
-                limite = true;
-            }
-        }
-
         pwm_set_gpio_level(led_red_pino, 100 * temperatura_ambiente);
-        pwm_set_gpio_level(led_blue_pino, 100 * resevatorio_agua);
+        pwm_set_gpio_level(led_blue_pino, 100 * reservatorio_agua);
         pwm_set_gpio_level(led_green_pino, 100 * umidade_solo);
         ssd1306_send_data(&ssd);
-
-        if((temperatura_ambiente == 9)  && (limite == false)){
-            ssd1306_fill(&ssd, false);
-            ssd1306_send_data(&ssd);
-        }
         
         sleep_ms(500);
     }
@@ -166,6 +153,7 @@ void gpio_irq_handler(uint gpio, uint32_t events){
         ultimo_tempo = tempo_atual;
         if(gpio == 5){
             printf("BTN_A\n");
+            trava_temperatura = true;
         }
         else if(gpio == 6){
             printf("BTN_B\n");
@@ -175,6 +163,61 @@ void gpio_irq_handler(uint gpio, uint32_t events){
         else if(gpio == 22){
             printf("BTN_J\n");
             reset_usb_boot(0, 0);
+        }
+    }
+}
+
+uint8_t sensor_temperatura(){
+    uint8_t sensor;
+
+    sensor = 15 + rand() % (40 - 15 + 1);
+
+    return sensor;
+}
+
+uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual){
+    if((reservatorio_atual < 80) && (trava_reservatorio == false)){
+        reservatorio_atual = reservatorio_atual + 7;
+        if(reservatorio_atual > 80){
+            trava_reservatorio = true;
+        }
+    }
+    else if((reservatorio_atual < 20) && (trava_reservatorio == true)){
+        trava_reservatorio = false;
+    }
+
+    return reservatorio_atual;
+}
+
+void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, uint8_t *temperatura_atual){
+    static bool trava = false;
+    if((*umidade_atual < 60) && (trava == false)){
+        *umidade_atual = *umidade_atual + 1;
+        *reservatorio_atual = *reservatorio_atual - 2;
+        if(*umidade_atual >= 60){
+            trava = true;
+        }
+    }
+    else{
+        if(*temperatura_atual > 35){
+            *umidade_atual = *umidade_atual - 4;
+            *reservatorio_atual = *reservatorio_atual - 6;
+        }
+        else if(*temperatura_atual > 30){
+            *umidade_atual = *umidade_atual - 3;
+            *reservatorio_atual = *reservatorio_atual - 5;
+        }
+        else if(*temperatura_atual > 25){
+            *umidade_atual = *umidade_atual - 2;
+            *reservatorio_atual = *reservatorio_atual - 3;
+        }
+        else{
+            *umidade_atual = *umidade_atual - 1;
+            *reservatorio_atual = *reservatorio_atual - 2;
+        }
+        
+        if(*umidade_atual < 20){
+            trava = false;
         }
     }
 }
