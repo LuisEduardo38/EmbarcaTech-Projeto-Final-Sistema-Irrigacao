@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "pico/bootrom.h"
+#include "hardware/pwm.h"
 
 #include "Bibliotecas/font.h"
 #include "Bibliotecas/ssd1306.h"
@@ -11,18 +12,17 @@
 #define I2C_SCL 15
 #define endereco 0x3C
 
-const uint8_t led_red_pinos = 13;
-const uint8_t led_blue_pinos = 12;
-const uint8_t led_green_pinos = 11;
-volatile bool estado_red = false;
-volatile bool estado_blue = false;
-volatile bool estado_green = false;
+const uint8_t led_red_pino = 13;
+const uint8_t led_blue_pino = 12;
+const uint8_t led_green_pino = 11;
 
 const uint8_t btn_a = 5;
 const uint8_t btn_b = 6;
 const uint8_t btn_j = 22;
 
 volatile uint32_t ultimo_tempo = 0;
+volatile bool segunda_tela = true;
+volatile bool limpar_tela = false;
 
 void iniciar_pinos();
 void gpio_irq_handler(uint gpio, uint32_t events);
@@ -47,41 +47,111 @@ int main(){
     ssd1306_fill(&ssd, false);
     ssd1306_send_data(&ssd);
 
+    bool limite = true;
+
     uint8_t umidade_solo = 0;
     uint8_t resevatorio_agua = 0;
-    uint8_t temperatura = 0;
+    uint8_t temperatura_ambiente = 20;
 
     char umidade [2];
     char resertorio [2];
+    char temperatura [2];
 
     while(true){
         sprintf(umidade, "%d", umidade_solo);
         sprintf(resertorio, "%d", resevatorio_agua);
-
-        umidade_solo++;
-        resevatorio_agua++;
-
-        ssd1306_draw_string(&ssd, "SISTEMA DE", 26, 1);
-        ssd1306_draw_string(&ssd, "IRRIGACAO", 26, 10);
+        sprintf(temperatura, "%d", temperatura_ambiente);
         
-        ssd1306_draw_string(&ssd, "RESERTORIO", 27, 25);
-        ssd1306_draw_string(&ssd, "  :10", 48, 35);
-        ssd1306_draw_string(&ssd, resertorio, 44, 35);
-        ssd1306_draw_string(&ssd, "UMIDADE SOLO", 14, 45);
-        ssd1306_draw_string(&ssd, "  :10", 48, 55);
-        ssd1306_draw_string(&ssd, umidade, 44, 55);
+        if(limpar_tela == true){
+            ssd1306_fill(&ssd, false);
+            ssd1306_send_data(&ssd);
+            limpar_tela = false;
+        }
 
+        if(segunda_tela == true){
+            ssd1306_draw_string(&ssd, "SISTEMA DE", 26, 1);
+            ssd1306_draw_string(&ssd, "IRRIGACAO", 26, 10);
+            ssd1306_draw_string(&ssd, "RESERTORIO", 27, 25);
+            ssd1306_draw_string(&ssd, "  :100", 48, 35);
+            ssd1306_draw_string(&ssd, resertorio, 38, 35);
+            ssd1306_draw_string(&ssd, "UMIDADE SOLO", 14, 45);
+            ssd1306_draw_string(&ssd, "  :100", 48, 55);
+            ssd1306_draw_string(&ssd, umidade, 38, 55);
+        }
+        else{
+            ssd1306_draw_string(&ssd, "SISTEMA DE", 26, 1);
+            ssd1306_draw_string(&ssd, "IRRIGACAO", 26, 10);
+            ssd1306_draw_string(&ssd, "TEMPERATURA", 20, 30);
+            ssd1306_draw_string(&ssd, "C", 75, 45);
+            ssd1306_draw_string(&ssd, temperatura, 55, 45);
+        }
 
+        /*if(limite == true){
+            umidade_solo++;
+            resevatorio_agua++;    
+            if(umidade_solo == 100){
+                limite = false;
+            }
+        }
+        else if(limite == false){
+            umidade_solo--;
+            resevatorio_agua--;
+            if(umidade_solo == 0){
+                limite = true;
+            }
+        }*/
 
+        if(limite == true){
+            temperatura_ambiente++;
+            if(temperatura_ambiente == 40){
+                limite = false;
+            }
+        }
+        else if(limite == false){
+            temperatura_ambiente--;
+            if(temperatura_ambiente == 0){
+                limite = true;
+            }
+        }
+
+        pwm_set_gpio_level(led_red_pino, 100 * temperatura_ambiente);
+        pwm_set_gpio_level(led_blue_pino, 100 * resevatorio_agua);
+        pwm_set_gpio_level(led_green_pino, 100 * umidade_solo);
         ssd1306_send_data(&ssd);
-        sleep_ms(1000);
+
+        if((temperatura_ambiente == 9)  && (limite == false)){
+            ssd1306_fill(&ssd, false);
+            ssd1306_send_data(&ssd);
+        }
+        
+        sleep_ms(500);
     }
 }
 
 void iniciar_pinos(){
-    gpio_init(led_red_pinos);
-    gpio_init(led_blue_pinos);
-    gpio_init(led_green_pinos);
+    gpio_set_function(led_red_pino, GPIO_FUNC_PWM);
+    gpio_set_function(led_blue_pino, GPIO_FUNC_PWM);
+    gpio_set_function(led_green_pino, GPIO_FUNC_PWM);
+    uint slice_numero_blue, slice_numero_green, slice_numero_red;
+    slice_numero_blue = pwm_gpio_to_slice_num(led_red_pino);
+    slice_numero_blue = pwm_gpio_to_slice_num(led_blue_pino);
+    slice_numero_green = pwm_gpio_to_slice_num(led_green_pino);
+    pwm_set_clkdiv(slice_numero_red, 4.0);
+    pwm_set_clkdiv(slice_numero_blue, 4.0);
+    pwm_set_clkdiv(slice_numero_green, 4.0);
+    pwm_set_wrap(slice_numero_red, 4000);
+    pwm_set_wrap(slice_numero_blue, 10000);
+    pwm_set_wrap(slice_numero_green, 10000);
+    pwm_set_gpio_level(led_red_pino, 100);
+    pwm_set_gpio_level(led_blue_pino, 100);
+    pwm_set_gpio_level(led_green_pino, 100);
+    pwm_set_enabled(slice_numero_red, true);
+    pwm_set_enabled(slice_numero_blue, true);
+    pwm_set_enabled(slice_numero_green, true);
+
+    gpio_init(btn_a);
+    gpio_init(btn_b);
+    gpio_init(btn_j);
     gpio_set_dir(btn_a, GPIO_IN);
     gpio_set_dir(btn_b, GPIO_IN);
     gpio_set_dir(btn_j, GPIO_IN);
@@ -96,13 +166,15 @@ void gpio_irq_handler(uint gpio, uint32_t events){
         ultimo_tempo = tempo_atual;
         if(gpio == 5){
             printf("BTN_A\n");
-            reset_usb_boot(0, 0);
         }
         else if(gpio == 6){
             printf("BTN_B\n");
+            limpar_tela = true;
+            segunda_tela = !segunda_tela;
         }
         else if(gpio == 22){
             printf("BTN_J\n");
+            reset_usb_boot(0, 0);
         }
     }
 }
