@@ -36,10 +36,18 @@ volatile bool limpar_tela = false;
 volatile bool trava_temperatura = true;
 volatile bool trava_tempo = true;
 
+int umida [] = {1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1};
+
 void iniciar_pinos();
 uint8_t sensor_temperatura();
 void gpio_irq_handler(uint gpio, uint32_t events);
+uint8_t manipulacao_matriz(uint8_t numero, PIO pio, int sm);
 uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual);
+void imprimir_numero(uint8_t intesidade ,int *numero, PIO pio, int sm);
 void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, uint8_t *temperatura_atual);
 
 int main(){
@@ -72,6 +80,8 @@ int main(){
     uint8_t reservatorio_agua = 100;
     uint8_t temperatura_ambiente = 0;
 
+    uint8_t icones = 0;
+
     char umidade [2];
     char resertorio [2];
     char temperatura [2];
@@ -86,7 +96,7 @@ int main(){
 
         sensor_umidade_solo(&umidade_solo, &reservatorio_agua, &temperatura_ambiente);
 
-        printf("%d\n", umidade_solo);
+        icones = manipulacao_matriz(icones, pio, sm);
 
         sprintf(umidade, "%d", umidade_solo);
         sprintf(resertorio, "%d", reservatorio_agua);
@@ -232,5 +242,54 @@ void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, ui
         if(*umidade_atual < 20){
             trava = false;
         }
+    }
+}
+
+uint8_t manipulacao_matriz(uint8_t numero, PIO pio, int sm){
+    if(numero <= 3){
+        imprimir_numero(numero, umida, pio, sm);
+        numero++;
+    }
+    else if(numero <= 6){
+        imprimir_numero(numero, umida, pio, sm);
+        numero++;
+    }
+    else if(numero <= 9){
+        imprimir_numero(numero, umida, pio, sm);
+        numero++;
+    }
+    else{
+        numero = 0;
+    }
+
+    return numero;
+}
+
+void imprimir_numero(uint8_t intensidade,int *numero, PIO pio, int sm){
+    uint8_t red, blue, green;
+    if((intensidade >= 0) && (intensidade <= 2)){
+        red = 0;
+        blue = 100;
+        green = 0;
+    }
+    else if((intensidade >= 3) && (intensidade <= 5)){
+        red = 0;
+        blue = 0;
+        green = 100;
+    }
+    else if((intensidade >= 6) && (intensidade <= 8)){
+        red = 100;
+        blue = 0;
+        green = 0;
+    }
+
+    for(uint8_t i = 0; i < numero_led; i++){
+        uint8_t RED = (uint8_t)(red * numero[i]);
+        uint8_t BLUE = (uint8_t)(blue * numero[i]);
+        uint8_t GREEN = (uint8_t)(green * numero[i]);
+
+        pio_sm_put_blocking(pio, sm, GREEN);
+        pio_sm_put_blocking(pio, sm, RED);
+        pio_sm_put_blocking(pio, sm, BLUE);
     }
 }
