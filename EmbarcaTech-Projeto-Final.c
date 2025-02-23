@@ -36,11 +36,24 @@ volatile bool limpar_tela = false;
 volatile bool trava_temperatura = true;
 volatile bool trava_tempo = true;
 
-int umida [] = {1, 1, 1, 1, 1,
+int umida [] = {0, 1, 1, 1, 0,
+                0, 1, 0, 1, 0,
+                0, 1, 0, 1, 0,
+                0, 1, 0, 1, 0,
+                0, 1, 0, 1, 0};
+
+int agua [] =  {1, 0, 0, 0, 1,
+                1, 0, 0, 0, 1,
                 1, 1, 1, 1, 1,
-                1, 1, 1, 1, 1,
-                1, 1, 1, 1, 1,
+                1, 0, 0, 0, 1,
+                0, 1, 1, 1, 0};
+
+int tempe [] = {0, 0, 1, 0, 0,
+                0, 0, 1, 0, 0,
+                0, 0, 1, 0, 0,
+                0, 0, 1, 0, 0,
                 1, 1, 1, 1, 1};
+
 
 void iniciar_pinos();
 uint8_t sensor_temperatura();
@@ -251,11 +264,11 @@ uint8_t manipulacao_matriz(uint8_t numero, PIO pio, int sm){
         numero++;
     }
     else if(numero <= 6){
-        imprimir_numero(numero, umida, pio, sm);
+        imprimir_numero(numero, agua, pio, sm);
         numero++;
     }
     else if(numero <= 9){
-        imprimir_numero(numero, umida, pio, sm);
+        imprimir_numero(numero, tempe, pio, sm);
         numero++;
     }
     else{
