@@ -36,31 +36,38 @@ volatile bool limpar_tela = false;
 volatile bool trava_temperatura = true;
 volatile bool trava_tempo = true;
 
-int umida [] = {0, 1, 1, 1, 0,
-                0, 1, 0, 1, 0,
-                0, 1, 0, 1, 0,
-                0, 1, 0, 1, 0,
-                0, 1, 0, 1, 0};
+int face01 [] = {0, 1, 1, 1, 0,
+                 1, 0, 0, 0, 1,
+                 0, 0, 0, 0, 0,
+                 0, 1, 0, 1, 0,
+                 0, 1, 0, 1, 0};
 
-int agua [] =  {1, 0, 0, 0, 1,
-                1, 0, 0, 0, 1,
-                1, 1, 1, 1, 1,
-                1, 0, 0, 0, 1,
-                0, 1, 1, 1, 0};
+int face02 [] =  {0, 0, 0, 0, 0,
+                  1, 1, 1, 1, 1,
+                  0, 0, 0, 0, 0,
+                  0, 1, 0, 1, 0,
+                  0, 1, 0, 1, 0};
 
-int tempe [] = {0, 0, 1, 0, 0,
-                0, 0, 1, 0, 0,
-                0, 0, 1, 0, 0,
-                0, 0, 1, 0, 0,
-                1, 1, 1, 1, 1};
+
+int face03 [] =  {1, 0, 0, 0, 1,
+                  0, 1, 1, 1, 0,
+                  0, 0, 0, 0, 0,
+                  0, 1, 0, 1, 0,
+                  0, 1, 0, 1, 0};
+
+int face04 [] =  {1, 0, 0, 0, 1,
+                  0, 1, 0, 1, 0,
+                  0, 0, 1, 0, 0,
+                  0, 1, 0, 1, 0,
+                  1, 0, 0, 0, 1};
 
 
 void iniciar_pinos();
 uint8_t sensor_temperatura();
 void gpio_irq_handler(uint gpio, uint32_t events);
-uint8_t manipulacao_matriz(uint8_t numero, PIO pio, int sm);
+void manipulacao_matriz(uint8_t temperatura, uint8_t numero, PIO pio, int sm);
 uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual);
-void imprimir_numero(uint8_t intesidade ,int *numero, PIO pio, int sm);
+void imprimir_status(uint8_t temperatura, int *numero, PIO pio, int sm);
 void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, uint8_t *temperatura_atual);
 
 int main(){
@@ -89,7 +96,7 @@ int main(){
     uint offset = pio_add_program(pio, &ws2818b_program);
     ws2818b_program_init(pio, sm, offset, matriz_pino, 800000);
 
-    uint8_t umidade_solo = 40;
+    uint8_t umidade_solo = 50;
     uint8_t reservatorio_agua = 100;
     uint8_t temperatura_ambiente = 0;
 
@@ -109,7 +116,7 @@ int main(){
 
         sensor_umidade_solo(&umidade_solo, &reservatorio_agua, &temperatura_ambiente);
 
-        icones = manipulacao_matriz(icones, pio, sm);
+        manipulacao_matriz(temperatura_ambiente, reservatorio_agua, pio, sm);
 
         sprintf(umidade, "%d", umidade_solo);
         sprintf(resertorio, "%d", reservatorio_agua);
@@ -212,13 +219,13 @@ uint8_t sensor_temperatura(){
 uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual){
     static bool trava_reservatorio = false;
 
-    if((reservatorio_atual < 80) && (trava_reservatorio == false)){
-        reservatorio_atual = reservatorio_atual + 7;
-        if(reservatorio_atual > 80){
+    if((reservatorio_atual < 90) && (trava_reservatorio == false)){
+        reservatorio_atual = reservatorio_atual + 5;
+        if(reservatorio_atual > 90){
             trava_reservatorio = true;
         }
     }
-    else if((reservatorio_atual < 20) && (trava_reservatorio == true)){
+    else if((reservatorio_atual < 15) && (trava_reservatorio == true)){
         trava_reservatorio = false;
     }
 
@@ -227,72 +234,70 @@ uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual){
 
 void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, uint8_t *temperatura_atual){
     static bool trava = false;
-    if((*umidade_atual < 60) && (trava == false)){
+    if((*umidade_atual < 75) && (trava == false)){
         *umidade_atual = *umidade_atual + 1;
-        *reservatorio_atual = *reservatorio_atual - 2;
-        if(*umidade_atual >= 60){
+        *reservatorio_atual = *reservatorio_atual - 3;
+        if(*umidade_atual >= 75){
             trava = true;
         }
     }
     else{
         if(*temperatura_atual > 35){
             *umidade_atual = *umidade_atual - 4;
-            *reservatorio_atual = *reservatorio_atual - 6;
+            *reservatorio_atual = *reservatorio_atual - 1;
         }
         else if(*temperatura_atual > 30){
             *umidade_atual = *umidade_atual - 3;
-            *reservatorio_atual = *reservatorio_atual - 5;
         }
         else if(*temperatura_atual > 25){
             *umidade_atual = *umidade_atual - 2;
-            *reservatorio_atual = *reservatorio_atual - 3;
         }
         else{
             *umidade_atual = *umidade_atual - 1;
-            *reservatorio_atual = *reservatorio_atual - 2;
         }
         
-        if(*umidade_atual < 20){
+        if(*umidade_atual < 40){
             trava = false;
         }
     }
 }
 
-uint8_t manipulacao_matriz(uint8_t numero, PIO pio, int sm){
-    if(numero <= 3){
-        imprimir_numero(numero, umida, pio, sm);
-        numero++;
+void manipulacao_matriz(uint8_t temperatura, uint8_t numero, PIO pio, int sm){
+    if(numero > 80){
+        imprimir_status(temperatura, face01, pio, sm);
     }
-    else if(numero <= 6){
-        imprimir_numero(numero, agua, pio, sm);
-        numero++;
+    else if(numero > 60){
+        imprimir_status(temperatura, face02, pio, sm);
     }
-    else if(numero <= 9){
-        imprimir_numero(numero, tempe, pio, sm);
-        numero++;
+    else if(numero > 40){
+        imprimir_status(temperatura, face03, pio, sm);
     }
-    else{
-        numero = 0;
+    else if(numero < 30){
+        imprimir_status(temperatura, face04, pio, sm);
     }
-
-    return numero;
 }
 
-void imprimir_numero(uint8_t intensidade,int *numero, PIO pio, int sm){
+void imprimir_status(uint8_t temperatura, int *numero, PIO pio, int sm){
     uint8_t red, blue, green;
-    if((intensidade >= 0) && (intensidade <= 2)){
-        red = 0;
+
+    if(temperatura >= 30){
+        red = 100;
+        blue = 0;
+        green = 0;
+    }
+    else if(temperatura >= 25){
+        red = 100;
         blue = 100;
         green = 0;
     }
-    else if((intensidade >= 3) && (intensidade <= 5)){
-        red = 0;
+    else if(temperatura >= 20){
+        red = 100;
         blue = 0;
         green = 100;
     }
-    else if((intensidade >= 6) && (intensidade <= 8)){
-        red = 100;
-        blue = 0;
+    else if(temperatura >= 15){
+        red = 0;
+        blue = 100;
         green = 0;
     }
 
