@@ -32,20 +32,23 @@ const uint8_t btn_a = 5;
 const uint8_t btn_b = 6;
 const uint8_t btn_j = 22;
 
-//Declaração das variáveis com os pinos dos buzzer
-const uint8_t buzzer_direito_pin = 21;
-const uint8_t buzzer_esquerdo_pin = 10;
-
 //Declaração das variáveis com os pinos da matriz juntamento com a quantidade de leds
 const uint8_t matriz_pino = 7;
 const uint8_t numero_led = 25;
 
 //Declaração das variáveis globais
-volatile uint32_t ultimo_tempo = 0;
-volatile bool segunda_tela = true;
+//Controle de telas do display 1306
+volatile bool primeira_tela = true;
+volatile bool segunda_tela = false;
 volatile bool limpar_tela = false;
+
 volatile bool trava_temperatura = true;
 volatile bool trava_tempo = true;
+volatile uint32_t ultimo_tempo = 0;
+
+//Declaração de variáveis do tipo bool para controle de acionanto dos atuadores
+volatile bool trava_reservatorio = false;
+volatile bool trava_irrigacao = false;
 
 //Declaração dos frames para uso na matriz de leds
 int face01 [] = {1, 1, 1, 1, 1,
@@ -119,10 +122,6 @@ int main(){
     uint offset = pio_add_program(pio, &ws2818b_program);
     ws2818b_program_init(pio, sm, offset, matriz_pino, 800000);
 
-    //Declaração e configuração do PWM para os buzzer
-    uint32_t slice_direito_numero = pwm_gpio_to_slice_num(buzzer_direito_pin);
-    uint32_t canal_direito = pwm_gpio_to_channel(buzzer_direito_pin);
-
     //Declaração das variáveis para controle dos sensores
     uint8_t umidade_solo = 50;//Variáveis que irá armazenar os dados do sensor de umidade do solo
     uint8_t reservatorio_agua = 100;//Variáveis que irá armazenar os dados do sensor de nível da água
@@ -163,7 +162,7 @@ int main(){
         }
 
         //IF para controlar quais das tela será apresentado ao usuário
-        if(segunda_tela == true){//Com a primeira tela sendo para exibir dados de nível da água e umidade do solo
+        if(primeira_tela == true){//Com a primeira tela sendo para exibir dados de nível da água e umidade do solo
             ssd1306_draw_string(&ssd, "SISTEMA DE", 26, 1);
             ssd1306_draw_string(&ssd, "IRRIGACAO", 26, 10);
             ssd1306_draw_string(&ssd, "RESERTORIO", 27, 25);
@@ -173,12 +172,30 @@ int main(){
             ssd1306_draw_string(&ssd, "  :100", 48, 55);
             ssd1306_draw_string(&ssd, umidade, 38, 55);
         }
-        else{//Com a segunda tela sendo para exibir a temperatura do ambiente
+        else if(segunda_tela == true){//Com a segunda tela sendo para exibir a temperatura do ambiente
             ssd1306_draw_string(&ssd, "SISTEMA DE", 26, 1);
             ssd1306_draw_string(&ssd, "IRRIGACAO", 26, 10);
             ssd1306_draw_string(&ssd, "TEMPERATURA", 20, 30);
             ssd1306_draw_string(&ssd, "C", 75, 45);
             ssd1306_draw_string(&ssd, temperatura, 55, 45);
+        }
+        else{
+            ssd1306_draw_string(&ssd, "SISTEMA DE", 26, 1);
+            ssd1306_draw_string(&ssd, "IRRIGACAO", 26, 10);
+            ssd1306_draw_string(&ssd, "BOMBA dAGUA", 20, 25);
+            if(trava_reservatorio == false){
+                ssd1306_draw_string(&ssd, "LIGANDO  ", 30, 35);
+            }
+            else{
+                ssd1306_draw_string(&ssd, "DESLIGADO", 30, 35);
+            }
+            ssd1306_draw_string(&ssd, "IRRIGADOR", 25, 45);
+            if(trava_irrigacao == false){
+                ssd1306_draw_string(&ssd, " LIGANDO  ", 25, 55);
+            }
+            else{
+                ssd1306_draw_string(&ssd, "DESLIGADO", 30, 55);
+            }
         }
 
         //Alterando o estado do led RGB com base nos dados dos sensores
@@ -195,9 +212,6 @@ int main(){
 //Função para iniciar os pinos da placa
 void iniciar_pinos(){
     //Configuração dos leds para ajuste via PWM
-    gpio_init(led_red_pino);
-    gpio_init(led_blue_pino);
-    gpio_init(led_green_pino);
     gpio_set_function(led_red_pino, GPIO_FUNC_PWM);
     gpio_set_function(led_blue_pino, GPIO_FUNC_PWM);
     gpio_set_function(led_green_pino, GPIO_FUNC_PWM);
@@ -228,12 +242,6 @@ void iniciar_pinos(){
     gpio_pull_up(btn_a);
     gpio_pull_up(btn_b);
     gpio_pull_up(btn_j);
-
-    //Configurações dos buzzer para ajuste via PWM
-    gpio_init(buzzer_direito_pin);
-    gpio_init(buzzer_esquerdo_pin);
-    gpio_set_function(buzzer_direito_pin, GPIO_FUNC_PWM);
-    gpio_set_function(buzzer_esquerdo_pin, GPIO_FUNC_PWM);
 }
 
 //Função para tratamento de rotinas de interrupções
@@ -248,8 +256,22 @@ void gpio_irq_handler(uint gpio, uint32_t events){
             trava_temperatura = true;//Trava colocando em true para permite a troca da temperatura
         }
         else if(gpio == 6){//Mudanças em bool para permiti a troca correta das telas
-            limpar_tela = true;
-            segunda_tela = !segunda_tela;
+            if((primeira_tela == true) && (segunda_tela == false)){
+                primeira_tela = false;
+                segunda_tela = true;
+                limpar_tela = true;
+            }
+            else if((primeira_tela == false) && (segunda_tela == true)){
+                primeira_tela = false;
+                segunda_tela = false;
+                limpar_tela = true;
+            }
+            else{
+                primeira_tela = true;
+                segunda_tela = false;
+                limpar_tela = true;
+            }
+            
         }
         else if(gpio == 22){//Entra no modo BootSel
             reset_usb_boot(0, 0);
@@ -268,8 +290,6 @@ uint8_t sensor_temperatura(){
 
 //Função que irá coletar dados do nível da água como também será responsável por preencher novamente o reservatório
 uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual){
-    static bool trava_reservatorio = false;
-
     //Neste condicional se o nível estiver abaixa de 90% e a trava for FALSE vai entrar
     if((reservatorio_atual < 90) && (trava_reservatorio == false)){
         reservatorio_atual = reservatorio_atual + 5;//Aqui será preenchindo novamente o reservatório
@@ -288,19 +308,12 @@ uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual){
 
 //Função para coletar e processar dados de umidade e água
 void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, uint8_t temperatura_atual){
-    //Declaração de uma variável do tipo bool para ser usando no IF
-    static bool trava = false;
-
-    //Declaração e configuração do buzzer
-    uint32_t slice_esquerdo_numero = pwm_gpio_to_slice_num(buzzer_esquerdo_pin);
-    uint32_t canal_esquerdo = pwm_gpio_to_channel(buzzer_esquerdo_pin);
-
     //Neste condicional está vereficando se a umidade do solo é inferior a 75 e a trava está FALSE
-    if((*umidade_atual < 75) && (trava == false)){
+    if((*umidade_atual < 75) && (trava_irrigacao == false)){
         *umidade_atual = *umidade_atual + 1;//Incrementado mais 1 a umidade do solo
         *reservatorio_atual = *reservatorio_atual - 3;//Para cada uma unidade de umidade de solo irá decrementar menos 3 do reservatório
         if(*umidade_atual >= 75){//Se a umidade for igual ou maior a 75% irá mudar a trava para TRUE
-            trava = true;
+            trava_irrigacao = true;
         }
     }//Caso as condições não sejam atendidas no primeiro IF entrarar neste ELSE
     else{
@@ -321,11 +334,8 @@ void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, ui
         
         //IF para mudar a trava caso a umidade caiu para menos que 40%
         if(*umidade_atual < 40){
-            trava = false;
+            trava_irrigacao = false;
         }
-    }
-    if(trava == false){
-        buzzer_esquerdo(slice_esquerdo_numero, canal_esquerdo, 300, 500);
     }
 }
 
@@ -390,12 +400,4 @@ void imprimir_status(uint8_t temperatura, int *numero, PIO pio, int sm){
         pio_sm_put_blocking(pio, sm, RED);
         pio_sm_put_blocking(pio, sm, BLUE);
     }
-}
-
-void buzzer_direito(){
-
-}
-
-void buzzer_esquerdo(){
-
 }
