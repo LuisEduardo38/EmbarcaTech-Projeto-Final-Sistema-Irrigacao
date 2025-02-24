@@ -42,6 +42,7 @@ volatile bool primeira_tela = true;
 volatile bool segunda_tela = false;
 volatile bool limpar_tela = false;
 
+//Diversos
 volatile bool trava_temperatura = true;
 volatile bool trava_tempo = true;
 volatile uint32_t ultimo_tempo = 0;
