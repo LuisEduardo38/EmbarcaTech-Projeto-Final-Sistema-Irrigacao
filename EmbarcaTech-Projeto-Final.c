@@ -32,6 +32,10 @@ const uint8_t btn_a = 5;
 const uint8_t btn_b = 6;
 const uint8_t btn_j = 22;
 
+//Declaração das variáveis com os pinos dos buzzer
+const uint8_t buzzer_direito_pin = 21;
+const uint8_t buzzer_esquerdo_pin = 10;
+
 //Declaração das variáveis com os pinos da matriz juntamento com a quantidade de leds
 const uint8_t matriz_pino = 7;
 const uint8_t numero_led = 25;
@@ -44,30 +48,36 @@ volatile bool trava_temperatura = true;
 volatile bool trava_tempo = true;
 
 //Declaração dos frames para uso na matriz de leds
-int face01 [] = {0, 1, 1, 1, 0,
-                 1, 0, 0, 0, 1,
+int face01 [] = {1, 1, 1, 1, 1,
                  0, 0, 0, 0, 0,
-                 0, 1, 0, 1, 0,
-                 0, 1, 0, 1, 0};
+                 0, 0, 0, 0, 0,
+                 0, 0, 0, 0, 0,
+                 0, 0, 0, 0, 0};
 
-int face02 [] =  {0, 0, 0, 0, 0,
+int face02 [] =  {1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1,
                   0, 0, 0, 0, 0,
-                  0, 1, 0, 1, 0,
-                  0, 1, 0, 1, 0};
-
-
-int face03 [] =  {1, 0, 0, 0, 1,
-                  0, 1, 1, 1, 0,
                   0, 0, 0, 0, 0,
-                  0, 1, 0, 1, 0,
-                  0, 1, 0, 1, 0};
+                  0, 0, 0, 0, 0};
 
-int face04 [] =  {1, 0, 0, 0, 1,
-                  0, 1, 0, 1, 0,
-                  0, 0, 1, 0, 0,
-                  0, 1, 0, 1, 0,
-                  1, 0, 0, 0, 1};
+
+int face03 [] =  {1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1,
+                  0, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0};
+
+int face04 [] =  {1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1,
+                  0, 0, 0, 0, 0};
+
+int face05 [] =  {1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1};
 
 //Protótipos das funções do código
 void iniciar_pinos();
@@ -108,6 +118,10 @@ int main(){
     int sm = 0;
     uint offset = pio_add_program(pio, &ws2818b_program);
     ws2818b_program_init(pio, sm, offset, matriz_pino, 800000);
+
+    //Declaração e configuração do PWM para os buzzer
+    uint32_t slice_direito_numero = pwm_gpio_to_slice_num(buzzer_direito_pin);
+    uint32_t canal_direito = pwm_gpio_to_channel(buzzer_direito_pin);
 
     //Declaração das variáveis para controle dos sensores
     uint8_t umidade_solo = 50;//Variáveis que irá armazenar os dados do sensor de umidade do solo
@@ -181,6 +195,9 @@ int main(){
 //Função para iniciar os pinos da placa
 void iniciar_pinos(){
     //Configuração dos leds para ajuste via PWM
+    gpio_init(led_red_pino);
+    gpio_init(led_blue_pino);
+    gpio_init(led_green_pino);
     gpio_set_function(led_red_pino, GPIO_FUNC_PWM);
     gpio_set_function(led_blue_pino, GPIO_FUNC_PWM);
     gpio_set_function(led_green_pino, GPIO_FUNC_PWM);
@@ -211,6 +228,12 @@ void iniciar_pinos(){
     gpio_pull_up(btn_a);
     gpio_pull_up(btn_b);
     gpio_pull_up(btn_j);
+
+    //Configurações dos buzzer para ajuste via PWM
+    gpio_init(buzzer_direito_pin);
+    gpio_init(buzzer_esquerdo_pin);
+    gpio_set_function(buzzer_direito_pin, GPIO_FUNC_PWM);
+    gpio_set_function(buzzer_esquerdo_pin, GPIO_FUNC_PWM);
 }
 
 //Função para tratamento de rotinas de interrupções
@@ -265,7 +288,13 @@ uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual){
 
 //Função para coletar e processar dados de umidade e água
 void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, uint8_t temperatura_atual){
+    //Declaração de uma variável do tipo bool para ser usando no IF
     static bool trava = false;
+
+    //Declaração e configuração do buzzer
+    uint32_t slice_esquerdo_numero = pwm_gpio_to_slice_num(buzzer_esquerdo_pin);
+    uint32_t canal_esquerdo = pwm_gpio_to_channel(buzzer_esquerdo_pin);
+
     //Neste condicional está vereficando se a umidade do solo é inferior a 75 e a trava está FALSE
     if((*umidade_atual < 75) && (trava == false)){
         *umidade_atual = *umidade_atual + 1;//Incrementado mais 1 a umidade do solo
@@ -295,22 +324,28 @@ void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, ui
             trava = false;
         }
     }
+    if(trava == false){
+        buzzer_esquerdo(slice_esquerdo_numero, canal_esquerdo, 300, 500);
+    }
 }
 
 //Função para manipular a matriz de led com base na temperatura ambiente
 void manipulacao_matriz(uint8_t temperatura, uint8_t numero, PIO pio, int sm){
     //Neste IF irá direcionar qual frame será exibido na matriz de led
-    if(numero > 80){
-        imprimir_status(temperatura, face01, pio, sm);
+    if(numero > 90){
+        imprimir_status(temperatura, face05, pio, sm);
     }
-    else if(numero > 60){
-        imprimir_status(temperatura, face02, pio, sm);
+    else if(numero > 70){
+        imprimir_status(temperatura, face04, pio, sm);
     }
-    else if(numero > 40){
+    else if(numero > 50){
         imprimir_status(temperatura, face03, pio, sm);
     }
-    else if(numero < 30){
-        imprimir_status(temperatura, face04, pio, sm);
+    else if(numero > 30){
+        imprimir_status(temperatura, face02, pio, sm);
+    }
+    else if(numero > 10){
+        imprimir_status(temperatura, face01, pio, sm);
     }
 }
 
@@ -319,25 +354,30 @@ void imprimir_status(uint8_t temperatura, int *numero, PIO pio, int sm){
     uint8_t red, blue, green;
 
     //Neste IF irá decider qual será a cor dos leds com base na temperatura
-    if(temperatura >= 30){
+    if(temperatura >= 35){
         red = 100;
         blue = 0;
+        green = 0;
+    }
+    else if(temperatura >= 30){
+        red = 100;
+        blue = 100;
         green = 0;
     }
     else if(temperatura >= 25){
         red = 100;
-        blue = 100;
-        green = 0;
-    }
-    else if(temperatura >= 20){
-        red = 100;
         blue = 0;
         green = 100;
+    }
+    else if(temperatura >= 20){
+        red = 0;
+        blue = 100;
+        green = 0;
     }
     else if(temperatura >= 15){
         red = 0;
         blue = 100;
-        green = 0;
+        green = 100;
     }
 
     //For para percorrer todos os leds da matriz para ativar ou desativar os leds espessificos
@@ -350,4 +390,12 @@ void imprimir_status(uint8_t temperatura, int *numero, PIO pio, int sm){
         pio_sm_put_blocking(pio, sm, RED);
         pio_sm_put_blocking(pio, sm, BLUE);
     }
+}
+
+void buzzer_direito(){
+
+}
+
+void buzzer_esquerdo(){
+
 }
