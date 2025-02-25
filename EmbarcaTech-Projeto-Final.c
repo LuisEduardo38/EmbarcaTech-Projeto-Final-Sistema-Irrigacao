@@ -5,6 +5,7 @@
 #include "pico/bootrom.h"
 #include "hardware/pwm.h"
 #include "hardware/timer.h"
+#include "hardware/watchdog.h"
 
 //Bibliotecas para funcionamento do display1306
 #include "Bibliotecas/font.h"
@@ -44,8 +45,8 @@ volatile bool limpar_tela = false;
 
 //Diversos
 volatile bool trava_temperatura = true;
-volatile bool trava_tempo = true;
 volatile uint32_t ultimo_tempo = 0;
+struct repeating_timer timer_temperatura;
 
 //Declaração de variáveis do tipo bool para controle de acionanto dos atuadores
 volatile bool trava_reservatorio = false;
@@ -85,11 +86,11 @@ int face05 [] =  {1, 1, 1, 1, 1,
 
 //Protótipos das funções do código
 void iniciar_pinos();
-uint8_t sensor_temperatura();
 void gpio_irq_handler(uint gpio, uint32_t events);
 uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual);
+bool alterna_temperatura(struct repeating_timer *temperatura);
 void imprimir_status(uint8_t temperatura, int *numero, PIO pio, int sm);
-void manipulacao_matriz(uint8_t temperatura, uint8_t numero, PIO pio, int sm);
+void manipulacao_matriz(uint8_t umidade, uint8_t temperatura, PIO pio, int sm);
 void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, uint8_t temperatura_atual);
 
 //Função principal do código
@@ -126,21 +127,18 @@ int main(){
     //Declaração das variáveis para controle dos sensores
     uint8_t umidade_solo = 50;//Variáveis que irá armazenar os dados do sensor de umidade do solo
     uint8_t reservatorio_agua = 100;//Variáveis que irá armazenar os dados do sensor de nível da água
-    uint8_t temperatura_ambiente = 0;//Variáveis que irá armazenar os dados do sensor de temperatura ambiente
+    uint8_t temperatura_ambiente = 15;//Variáveis que irá armazenar os dados do sensor de temperatura ambiente
 
     //Declaração de string para apresentar os dados dos sensores
     char umidade [3];
-    char resertorio [3];
+    char reservatorio [3];
     char temperatura [3];
+
+    //Alarme para mudar constantemente a temperatua
+    add_repeating_timer_ms(5000, alterna_temperatura, &temperatura_ambiente, &timer_temperatura);
 
     //Loop principal
     while(true){
-        //IF para permitir a entrada na função sensor_temperatura
-        if(trava_temperatura == true){
-            temperatura_ambiente = sensor_temperatura();//O dado da temperatura será coletado e armazenado na variável            
-            trava_temperatura = false;
-        }
-
         //Chando a função para coletar dado do nível da água e armazenando na variável
         reservatorio_agua = sensor_reservatorio_agua(reservatorio_agua);
 
@@ -148,11 +146,11 @@ int main(){
         sensor_umidade_solo(&umidade_solo, &reservatorio_agua, temperatura_ambiente);
 
         //Enviar dados a matriz de led com base na temperatura e nível da água
-        manipulacao_matriz(temperatura_ambiente, reservatorio_agua, pio, sm);
+        manipulacao_matriz(umidade_solo, temperatura_ambiente, pio, sm);
 
         //Converção dos dados das variáveis dos sensores para string para serem exibidos no display
         sprintf(umidade, "%d", umidade_solo);
-        sprintf(resertorio, "%d", reservatorio_agua);
+        sprintf(reservatorio, "%d", reservatorio_agua);
         sprintf(temperatura, "%d", temperatura_ambiente);
         
         //IF para limpar a tela antes de troca para a segunda tela com a temperatura
@@ -168,7 +166,7 @@ int main(){
             ssd1306_draw_string(&ssd, "IRRIGACAO", 26, 10);
             ssd1306_draw_string(&ssd, "RESERTORIO", 27, 25);
             ssd1306_draw_string(&ssd, "  :100", 48, 35);
-            ssd1306_draw_string(&ssd, resertorio, 38, 35);
+            ssd1306_draw_string(&ssd, reservatorio, 38, 35);
             ssd1306_draw_string(&ssd, "UMIDADE SOLO", 14, 45);
             ssd1306_draw_string(&ssd, "  :100", 48, 55);
             ssd1306_draw_string(&ssd, umidade, 38, 55);
@@ -253,8 +251,8 @@ void gpio_irq_handler(uint gpio, uint32_t events){
     if(tempo_atual - ultimo_tempo > 200){
         ultimo_tempo = tempo_atual;
         //IFs para indicar qual botão foi pressionado
-        if(gpio == 5){
-            trava_temperatura = true;//Trava colocando em true para permite a troca da temperatura
+        if(gpio == 5){//Para reiniciar o código caso haja a nicessidade
+            watchdog_reboot(0, 0, 0);
         }
         else if(gpio == 6){//Mudanças em bool para permiti a troca correta das telas
             if((primeira_tela == true) && (segunda_tela == false)){
@@ -284,7 +282,7 @@ void gpio_irq_handler(uint gpio, uint32_t events){
 uint8_t sensor_temperatura(){
     uint8_t sensor;
 
-    sensor = 15 + rand() % (40 - 15 + 1);//A temperatura é um valor que é randomizando entre 15 a 40
+    sensor = 4;
 
     return sensor;
 }
@@ -310,10 +308,10 @@ uint8_t sensor_reservatorio_agua(uint8_t reservatorio_atual){
 //Função para coletar e processar dados de umidade e água
 void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, uint8_t temperatura_atual){
     //Neste condicional está vereficando se a umidade do solo é inferior a 75 e a trava está FALSE
-    if((*umidade_atual < 75) && (trava_irrigacao == false)){
-        *umidade_atual = *umidade_atual + 1;//Incrementado mais 1 a umidade do solo
+    if((*umidade_atual < 80) && (trava_irrigacao == false)){
+        *umidade_atual = *umidade_atual + 2;//Incrementado mais 1 a umidade do solo
         *reservatorio_atual = *reservatorio_atual - 3;//Para cada uma unidade de umidade de solo irá decrementar menos 3 do reservatório
-        if(*umidade_atual >= 75){//Se a umidade for igual ou maior a 75% irá mudar a trava para TRUE
+        if(*umidade_atual >= 80){//Se a umidade for igual ou maior a 75% irá mudar a trava para TRUE
             trava_irrigacao = true;
         }
     }//Caso as condições não sejam atendidas no primeiro IF entrarar neste ELSE
@@ -334,28 +332,28 @@ void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, ui
         }
         
         //IF para mudar a trava caso a umidade caiu para menos que 40%
-        if(*umidade_atual < 40){
+        if(*umidade_atual < 30){
             trava_irrigacao = false;
         }
     }
 }
 
 //Função para manipular a matriz de led com base na temperatura ambiente
-void manipulacao_matriz(uint8_t temperatura, uint8_t numero, PIO pio, int sm){
+void manipulacao_matriz(uint8_t umidade, uint8_t temperatura, PIO pio, int sm){
     //Neste IF irá direcionar qual frame será exibido na matriz de led
-    if(numero > 90){
+    if(umidade >= 80){
         imprimir_status(temperatura, face05, pio, sm);
     }
-    else if(numero > 70){
+    else if(umidade >= 70){
         imprimir_status(temperatura, face04, pio, sm);
     }
-    else if(numero > 50){
+    else if(umidade >= 60){
         imprimir_status(temperatura, face03, pio, sm);
     }
-    else if(numero > 30){
+    else if(umidade >= 40){
         imprimir_status(temperatura, face02, pio, sm);
     }
-    else if(numero > 10){
+    else if(umidade >= 30){
         imprimir_status(temperatura, face01, pio, sm);
     }
 }
@@ -401,4 +399,16 @@ void imprimir_status(uint8_t temperatura, int *numero, PIO pio, int sm){
         pio_sm_put_blocking(pio, sm, RED);
         pio_sm_put_blocking(pio, sm, BLUE);
     }
+}
+
+//Função para alterna a temperatura ambiente
+bool alterna_temperatura(struct repeating_timer *temperatura){
+    //Declaração de um ponteiro do mesmo tipo da variável quer alterar o valor
+    uint8_t *tempe = (uint8_t *)temperatura->user_data;
+
+    //Alterando os valores via ponteiro
+    *tempe = 15 + rand() % (40 - 15 + 1);
+
+    //Retornado TRUE para o alarme continuar funcionado
+    return true;
 }
