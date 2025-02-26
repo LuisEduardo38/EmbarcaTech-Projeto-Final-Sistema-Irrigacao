@@ -154,7 +154,7 @@ int main(){
     srand(time(NULL));
 
     //Declaração das interrupções
-    gpio_set_irq_enabled_with_callback(btn_a, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);//Mundar a temperatura
+    gpio_set_irq_enabled_with_callback(btn_a, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);//reiniciar o SE
     gpio_set_irq_enabled_with_callback(btn_b, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);//Trocar de tela
     gpio_set_irq_enabled_with_callback(btn_j, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);//Entra no modo bootsel
 
@@ -247,7 +247,7 @@ int main(){
             ssd1306_draw_string(&ssd, "C", 75, 45);
             ssd1306_draw_string(&ssd, temperatura, 55, 45);
         }
-        else{
+        else{//Terceira tela com o estados dos atuadores
             ssd1306_draw_string(&ssd, "SISTEMA DE", 26, 1);
             ssd1306_draw_string(&ssd, "IRRIGACAO", 26, 10);
             ssd1306_draw_string(&ssd, "BOMBA dAGUA", 20, 25);
@@ -270,7 +270,9 @@ int main(){
         pwm_set_gpio_level(led_red_pino, 100 * temperatura_ambiente);//O led red irá aumentar ou diminir a sua intensidade com base na temperatura do ambiente através do PWM
         gpio_put(led_blue_pino, estado_blue);
         gpio_put(led_green_pino, estado_green);
-        ssd1306_send_data(&ssd);//Atualiza o display
+        
+        //Atualiza o display
+        ssd1306_send_data(&ssd);
         
         //Delay do código
         sleep_ms(500);
@@ -375,7 +377,7 @@ void sensor_umidade_solo(uint8_t *umidade_atual, uint8_t *reservatorio_atual, ui
         //IF para processar quanto será o depreciamento da umidade do solo com base na temperatura
         if(temperatura_atual > 35){
             *umidade_atual = *umidade_atual - 4;
-            *reservatorio_atual = *reservatorio_atual - 1;//Para questões de "SIMULAÇÃO" coloquei para diminuir a quantidade de água devido alta temperatura
+            *reservatorio_atual = *reservatorio_atual - 1;//Para simular um gotejamento devido a alta temperatura
         }
         else if(temperatura_atual > 30){
             *umidade_atual = *umidade_atual - 3;
