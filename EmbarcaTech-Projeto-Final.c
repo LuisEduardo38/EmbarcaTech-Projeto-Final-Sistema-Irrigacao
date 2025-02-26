@@ -27,6 +27,8 @@
 const uint8_t led_red_pino = 13;
 const uint8_t led_blue_pino = 12;
 const uint8_t led_green_pino = 11;
+bool estado_blue = false;
+bool estado_green = false;
 
 //Declaração das variáveis com os pinos dos botões
 const uint8_t btn_a = 5;
@@ -44,13 +46,12 @@ volatile bool segunda_tela = false;
 volatile bool limpar_tela = false;
 
 //Diversos
-volatile bool trava_temperatura = true;
 volatile uint32_t ultimo_tempo = 0;
 struct repeating_timer timer_temperatura;
 
 //Declaração de variáveis do tipo bool para controle de acionanto dos atuadores
-volatile bool trava_reservatorio = false;
-volatile bool trava_irrigacao = false;
+bool trava_reservatorio = false;
+bool trava_irrigacao = false;
 
 //Declaração dos frames para uso na matriz de leds
 int face01 [] = {1, 1, 1, 1, 1,
@@ -84,6 +85,58 @@ int face05 [] =  {1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1};
 
+/*
+//Configurações para o sensor de temperatura LM35
+//Declaração de variáveis
+const uint8_t sensor_temperatura_pino = 26;
+const uint16_t amd_ref = 4096;
+const float voltagem_ref = 3.3;
+const float escola_lm35 = 0.01;
+
+//Inicializando a biblioteca e pinos
+adc_init();
+adc_gpio_init(sensor_temperatura_pino);
+adc_select_input(0);
+
+//Processando os dados coletado
+uint16_t resultado = adc_read();//Lendo os dados coletados via ADC
+float voltagem = (resultado / adc_ref) * voltagem_ref;//Convertendo para vontagem
+float temperaturaC = voltagem / escola_lm35;//Colocando na escala do sensor
+
+//Configurações para o sensor de nível de água
+//Declaração de variáveis
+const uint8_t sensor_agua_pino = 27;
+const uint16_t adc_ref = 4096;
+const float voltagem_ref = 3.3;
+const float convercao_adc = voltagem_red / (adc_ref - 1);
+
+//Inicializando a biblioteca e pinos
+adc_init();
+adc_gpio_init(sensor_agua_pino);
+adc_select_input(1);
+
+//Processando os dados coletado
+uint16_t resultado = adc_read();//Lendo os dados coletados via ADC
+float voltagem = resultado * convercao_adc;//Convertendo para vontagem
+float nivel_agua = voltagem * 10;//A cada 1V será 10cm de água
+
+//Configurações para o sensor de umidade do solo
+//Declaração de variáveis
+//const uint8_t sensor_umidade_pino = 27;
+Const uint8_t sensor_umidade_pino = 20;
+
+//Inicializando a biblioteca e pinos
+//adc_init();
+//adc_gpio_init(sensor_umidade_pino);
+//adc_select_input(0);
+gpio_init(sensor_umidade_pino);
+gpio_set_dir(sensor_umidade_pino, GPIO_IN);
+
+//Processando os dados coletado
+//uint16_t umidade = adc_read();//Lendo os dados coletados via ADC
+int umidade = gpio_get(sensor_umidade_pino);
+*/
+
 //Protótipos das funções do código
 void iniciar_pinos();
 void gpio_irq_handler(uint gpio, uint32_t events);
@@ -106,23 +159,23 @@ int main(){
     gpio_set_irq_enabled_with_callback(btn_j, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);//Entra no modo bootsel
 
     //Configurações o display1306
-    i2c_init(I2C_PORT, 400 * 1000);
-    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
-    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
-    gpio_pull_up(I2C_SDA);
-    gpio_pull_up(I2C_SCL);
+    i2c_init(I2C_PORT, 400 * 1000);//Iniciando o barramento I2C com o clock de 400khz
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);//Configuração do pino para funciona o I2C
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);//Configuração do pino para funciona o I2C
+    gpio_pull_up(I2C_SDA);//Ativando os resistores pull-up muito importante para comunicação I2C
+    gpio_pull_up(I2C_SCL);//Ativando os resistores pull-up muito importante para comunicação I2C
     ssd1306_t ssd;
-    ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT);
+    ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT);//Iniciando o display
     ssd1306_config(&ssd);
     ssd1306_send_data(&ssd);
     ssd1306_fill(&ssd, false);
     ssd1306_send_data(&ssd);
 
     //Configurações da matriz de led WS2818B
-    PIO pio = pio0;
-    int sm = 0;
-    uint offset = pio_add_program(pio, &ws2818b_program);
-    ws2818b_program_init(pio, sm, offset, matriz_pino, 800000);
+    PIO pio = pio0;//Declaração do bloco PIO e escolhendo o PIO0 para rodar o código
+    int sm = 0;//Declando uma máquina de estado do bloco PIO e escolhendo a máquina 0
+    uint offset = pio_add_program(pio, &ws2818b_program);//Carregando o programa na memoria do pio e seu offset
+    ws2818b_program_init(pio, sm, offset, matriz_pino, 800000);//Iniciando a matriz com os parâmetros configurado
 
     //Declaração das variáveis para controle dos sensores
     uint8_t umidade_solo = 50;//Variáveis que irá armazenar os dados do sensor de umidade do solo
@@ -147,6 +200,22 @@ int main(){
 
         //Enviar dados a matriz de led com base na temperatura e nível da água
         manipulacao_matriz(umidade_solo, temperatura_ambiente, pio, sm);
+
+        //IF usa trava de irrigação para saber se está ligado se sim ligando ou desligado o led
+        if(trava_irrigacao == false){
+            estado_green = true;
+        }
+        else{
+            estado_green = false;
+        }
+
+        //IF usa trava de reservatório para saber se está ligado se sim ligando ou desligado o led
+        if(trava_reservatorio == false){
+            estado_blue = true;
+        }
+        else{
+            estado_blue = false;
+        }
 
         //Converção dos dados das variáveis dos sensores para string para serem exibidos no display
         sprintf(umidade, "%d", umidade_solo);
@@ -199,8 +268,8 @@ int main(){
 
         //Alterando o estado do led RGB com base nos dados dos sensores
         pwm_set_gpio_level(led_red_pino, 100 * temperatura_ambiente);//O led red irá aumentar ou diminir a sua intensidade com base na temperatura do ambiente através do PWM
-        pwm_set_gpio_level(led_blue_pino, 100 * reservatorio_agua);//O led blue irá aumentar ou diminir a sua intensidade com base no nível da água através do PWM
-        pwm_set_gpio_level(led_green_pino, 100 * umidade_solo);//O led green irá aumentar ou diminir a sua intensidade com base na umidade do solo através do PWM
+        gpio_put(led_blue_pino, estado_blue);
+        gpio_put(led_green_pino, estado_green);
         ssd1306_send_data(&ssd);//Atualiza o display
         
         //Delay do código
@@ -210,26 +279,22 @@ int main(){
 
 //Função para iniciar os pinos da placa
 void iniciar_pinos(){
+    //Configuração dos leds para indicar o acionamento da bomba e do irrigador
+    gpio_init(led_blue_pino);
+    gpio_init(led_green_pino);
+    gpio_set_dir(led_blue_pino, GPIO_OUT);
+    gpio_set_dir(led_green_pino, GPIO_OUT);
+    gpio_put(led_blue_pino, estado_blue);
+    gpio_put(led_green_pino, estado_green);
+
     //Configuração dos leds para ajuste via PWM
     gpio_set_function(led_red_pino, GPIO_FUNC_PWM);
-    gpio_set_function(led_blue_pino, GPIO_FUNC_PWM);
-    gpio_set_function(led_green_pino, GPIO_FUNC_PWM);
-    uint slice_numero_blue, slice_numero_green, slice_numero_red;
-    slice_numero_blue = pwm_gpio_to_slice_num(led_red_pino);
-    slice_numero_blue = pwm_gpio_to_slice_num(led_blue_pino);
-    slice_numero_green = pwm_gpio_to_slice_num(led_green_pino);
+    uint slice_numero_red;
+    slice_numero_red = pwm_gpio_to_slice_num(led_red_pino);
     pwm_set_clkdiv(slice_numero_red, 4.0);
-    pwm_set_clkdiv(slice_numero_blue, 4.0);
-    pwm_set_clkdiv(slice_numero_green, 4.0);
     pwm_set_wrap(slice_numero_red, 4000);
-    pwm_set_wrap(slice_numero_blue, 10000);
-    pwm_set_wrap(slice_numero_green, 10000);
     pwm_set_gpio_level(led_red_pino, 100);
-    pwm_set_gpio_level(led_blue_pino, 100);
-    pwm_set_gpio_level(led_green_pino, 100);
     pwm_set_enabled(slice_numero_red, true);
-    pwm_set_enabled(slice_numero_blue, true);
-    pwm_set_enabled(slice_numero_green, true);
 
     //Configurações dos botões da placa
     gpio_init(btn_a);
@@ -251,21 +316,21 @@ void gpio_irq_handler(uint gpio, uint32_t events){
     if(tempo_atual - ultimo_tempo > 200){
         ultimo_tempo = tempo_atual;
         //IFs para indicar qual botão foi pressionado
-        if(gpio == 5){//Para reiniciar o código caso haja a nicessidade
+        if(gpio == 5){//Para reiniciar o código caso haja a necessidade
             watchdog_reboot(0, 0, 0);
         }
         else if(gpio == 6){//Mudanças em bool para permiti a troca correta das telas
-            if((primeira_tela == true) && (segunda_tela == false)){
+            if((primeira_tela == true) && (segunda_tela == false)){//Primeira tela
                 primeira_tela = false;
                 segunda_tela = true;
                 limpar_tela = true;
             }
-            else if((primeira_tela == false) && (segunda_tela == true)){
+            else if((primeira_tela == false) && (segunda_tela == true)){//Segunda tela
                 primeira_tela = false;
                 segunda_tela = false;
                 limpar_tela = true;
             }
-            else{
+            else{//Terceira tela
                 primeira_tela = true;
                 segunda_tela = false;
                 limpar_tela = true;
@@ -276,15 +341,6 @@ void gpio_irq_handler(uint gpio, uint32_t events){
             reset_usb_boot(0, 0);
         }
     }
-}
-
-//Função para coletar dados de temperatura
-uint8_t sensor_temperatura(){
-    uint8_t sensor;
-
-    sensor = 4;
-
-    return sensor;
 }
 
 //Função que irá coletar dados do nível da água como também será responsável por preencher novamente o reservatório
