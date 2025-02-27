@@ -1,0 +1,19 @@
+# Projeto Final EmbarcaTech - Sistema de Irrigação
+
+> O projeto usa alguns funções do proprio SDK para simular um sistema de irrigação
+já que o mesmo foi feito para rodar na placa BitDogLag.
+
+#Vídeo no youtube do funcionamento
+> https://youtu.be/4RDGxi1jDJc
+
+## 🚀 Tecnologias Utilizadas
+
+- [ ] Linguagem de programação principal (Ex: Python, C, JavaScript)
+- [ ] Frameworks e bibliotecas (Ex: Django, React, Flask)
+- [X] Hardware (se aplicável, Ex: Arduino, Raspberry Pi)
+
+## 📦 Instalação
+
+```bash
+# Clone este repositório
+$ git clone https://github.com/LuisEduardo38/EmbarcaTech-Projeto-Final-Sistema-Irrigacao
